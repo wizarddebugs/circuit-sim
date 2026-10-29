@@ -3,61 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Circuit Simulator</title>
+    <title>Web Circuit Simulator - Final Complete</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #fff;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: #1e1e1e;
-            color: white;
-            font-family: sans-serif;
-            margin: 0;
-            padding: 20px;
         }
-        h2 {
-            margin-bottom: 10px;
-            color: #4ec9b0;
-        }
-        canvas {
-            background: #2d2d2d;
-            border: 2px solid #555;
-            cursor: crosshair;
-            border-radius: 6px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        .controls {
-            margin-top: 15px;
+        h1 { margin-bottom: 10px; font-size: 1.5rem; }
+        
+        .toolbar {
+            margin-bottom: 15px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
         }
-        button {
-            background-color: #0e639c;
+        .tool-btn, select, button {
+            padding: 8px 12px;
+            background: #333;
             color: white;
-            border: none;
-            padding: 8px 16px;
-            font-size: 0.9rem;
+            border: 1px solid #555;
             border-radius: 4px;
             cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
         }
-        button:hover {
-            background-color: #1177bb;
+        .tool-btn:hover, button:hover { background: #444; }
+        .tool-btn.active { background: #007acc; border-color: #0098ff; }
+        
+        .action-btn { background: #238636; border: none; }
+        .action-btn:hover { background: #2ea043; }
+        .pause-btn { background: #9e6a03; border: none; }
+        .pause-btn:hover { background: #bb8009; }
+        .danger-btn { background: #da3633; border: none; }
+        .danger-btn:hover { background: #f85149; }
+
+        .workspace {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .pane {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #555;
+            background: #252526;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            border-radius: 4px;
+        }
+        #circuitCanvas { cursor: crosshair; }
+        .plot-container {
+            width: 450px;
+            height: 340px;
+            background: #252526;
+            border: 2px solid #555;
+            border-radius: 4px;
+            padding: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .console {
+            margin-top: 15px;
+            width: 920px;
+            height: 120px;
+            background: #111;
+            border: 1px solid #444;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            overflow-y: auto;
+            color: #4ec9b0;
+            border-radius: 4px;
+        }
+        .instructions {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: #aaa;
         }
     </style>
 </head>
 <body>
 
-    <h2>Circuit Canvas Sandbox & Waveform Viewer</h2>
-    <canvas id="simCanvas" width="800" height="500"></canvas>
+    <h1>Interactive Circuit Simulator</h1>
     
-    <div class="controls">
-        <button id="clearBtn">Clear Nodes</button>
-        <button id="runPlotBtn">Run RC Simulation Plot</button>
+    <div class="toolbar" id="palette">
+        <button class="tool-btn active" data-tool="SELECT">Select / Move</button>
+        <button class="tool-btn" data-tool="WIRE">Wire (W)</button>
+        <button class="tool-btn" data-tool="R">Resistor (R)</button>
+        <button class="tool-btn" data-tool="C">Capacitor (C)</button>
+        <button class="tool-btn" data-tool="D">Diode (D)</button>
+        <button class="tool-btn" data-tool="V">Source (V)</button>
+        <button class="tool-btn" data-tool="GND">Ground (0)</button>
+
+        <select id="exampleSelect">
+            <option value="" disabled selected>Load Example Circuit...</option>
+            <option value="rc">RC Filter</option>
+            <option value="rectifier">Half-Wave Rectifier</option>
+            <option value="divider">Voltage Divider</option>
+        </select>
+
+        <button class="tool-btn" id="saveBtn">Save JSON</button>
+        <button class="tool-btn" id="loadBtn">Load JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display: none;">
+
+        <button class="action-btn" id="simulateBtn">Run</button>
+        <button class="pause-btn" id="pauseBtn">Pause</button>
+        <button class="tool-btn" id="resetBtn">Reset</button>
+        <button class="danger-btn" id="clearBtn">Clear</button>
     </div>
 
-    <!-- Modular app script -->
-    <script type="module" src="./app.js"></script>
+    <div class="workspace">
+        <div class="pane">
+            <canvas id="circuitCanvas" width="450" height="340"></canvas>
+        </div>
+        <div class="pane">
+            <div class="plot-container">
+                <canvas id="waveformChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        Tip: Click any node dot to probe/toggle its waveform | Click component to edit value | Select + Delete to remove
+    </div>
+
+    <div class="console" id="consoleOutput">Simulator ready. Build circuits, load examples, or save/load via JSON.</div>
+
+    <script type="module" src="./editor.js"></script>
 </body>
 </html>

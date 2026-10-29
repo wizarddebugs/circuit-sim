@@ -1,5 +1,6 @@
 // simulator.js
 import { solve } from './solver.js';
+import { getDiodeCompanion } from './diode.js';
 
 export function runTransient(netlist, tEnd, h) {
     let maxNode = 0;
@@ -8,9 +9,8 @@ export function runTransient(netlist, tEnd, h) {
     });
     const numNodes = maxNode;
 
-    // Task 15: Store results in arrays across N steps of size h
     let prevVoltages = new Array(numNodes + 1).fill(0);
-    let inductorCurrents = {}; // Track inductor currents for task 18/19
+    let inductorCurrents = {}; // Track inductor currents
     const timeResults = [];
 
     // Initialize inductor current trackers in netlist if any
@@ -27,86 +27,136 @@ export function runTransient(netlist, tEnd, h) {
         });
 
         const dim = numNodes + vSourceCount;
-        const G = Array.from({ length: dim }, () => new Array(dim).fill(0));
-        const I = new Array(dim).fill(0);
 
-        let vSourceIndex = numNodes;
+        // --- NEWTON-RAPHSON ITERATION LOOP (Tasks 28, 29, & 30) ---
+        let converged = false;
+        let iteration = 0;
+        const maxIterations = 50;
+        
+        let iterVoltages = { ...prevVoltages.reduce((acc, val, idx) => { if(idx > 0) acc[idx] = val; return acc; }, {}) };
+        let solution = [];
 
-        netlist.forEach((comp, idx) => {
-            const n1 = comp.nodeA;
-            const n2 = comp.nodeB;
+        while (!converged && iteration < maxIterations) {
+            iteration++;
 
-            // Task 20: Evaluate time-varying sources (e.g. sine or pulse functions)
-            let compValue = comp.value;
-            if (typeof comp.value === 'function') {
-                compValue = comp.value(t);
+            const G = Array.from({ length: dim }, () => new Array(dim).fill(0));
+            const I = new Array(dim).fill(0);
+            let vSourceIndex = numNodes;
+
+            netlist.forEach((comp, idx) => {
+                const n1 = comp.nodeA;
+                const n2 = comp.nodeB;
+
+                let compValue = comp.value;
+                if (typeof comp.value === 'function') {
+                    compValue = comp.value(t);
+                }
+
+                if (comp.type === 'R') {
+                    const g = 1 / compValue;
+                    if (n1 !== 0) G[n1 - 1][n1 - 1] += g;
+                    if (n2 !== 0) G[n2 - 1][n2 - 1] += g;
+                    if (n1 !== 0 && n2 !== 0) {
+                        G[n1 - 1][n2 - 1] -= g;
+                        G[n2 - 1][n1 - 1] -= g;
+                    }
+                } 
+                else if (comp.type === 'I') {
+                    if (n1 !== 0) I[n1 - 1] -= compValue;
+                    if (n2 !== 0) I[n2 - 1] += compValue;
+                } 
+                else if (comp.type === 'V') {
+                    const k = vSourceIndex++;
+                    if (n1 !== 0) {
+                        G[n1 - 1][k] += 1;
+                        G[k][n1 - 1] += 1;
+                    }
+                    if (n2 !== 0) {
+                        G[n2 - 1][k] -= 1;
+                        G[k][n2 - 1] -= 1;
+                    }
+                    I[k] = compValue;
+                }
+                else if (comp.type === 'C') {
+                    const geq = compValue / h;
+                    if (n1 !== 0) G[n1 - 1][n1 - 1] += geq;
+                    if (n2 !== 0) G[n2 - 1][n2 - 1] += geq;
+                    if (n1 !== 0 && n2 !== 0) {
+                        G[n1 - 1][n2 - 1] -= geq;
+                        G[n2 - 1][n1 - 1] -= geq;
+                    }
+
+                    const vOld1 = n1 !== 0 ? (prevVoltages[n1] || 0) : 0;
+                    const vOld2 = n2 !== 0 ? (prevVoltages[n2] || 0) : 0;
+                    const iHistory = geq * (vOld1 - vOld2);
+
+                    if (n1 !== 0) I[n1 - 1] += iHistory;
+                    if (n2 !== 0) I[n2 - 1] -= iHistory;
+                }
+                else if (comp.type === 'L') {
+                    const geq = h / compValue;
+                    if (n1 !== 0) G[n1 - 1][n1 - 1] += geq;
+                    if (n2 !== 0) G[n2 - 1][n2 - 1] += geq;
+                    if (n1 !== 0 && n2 !== 0) {
+                        G[n1 - 1][n2 - 1] -= geq;
+                        G[n2 - 1][n1 - 1] -= geq;
+                    }
+
+                    const iOld = inductorCurrents[idx] || 0;
+                    const vOld1 = n1 !== 0 ? (prevVoltages[n1] || 0) : 0;
+                    const vOld2 = n2 !== 0 ? (prevVoltages[n2] || 0) : 0;
+                    const iHistory = iOld + geq * (vOld1 - vOld2);
+
+                    if (n1 !== 0) I[n1 - 1] -= iHistory;
+                    if (n2 !== 0) I[n2 - 1] += iHistory;
+                }
+                else if (comp.type === 'D') {
+                    // --- TASKS 27 & 28: DIODE NORTON COMPANION & STAMPING ---
+                    const vA = n1 !== 0 ? (iterVoltages[n1] || 0) : 0;
+                    const vB = n2 !== 0 ? (iterVoltages[n2] || 0) : 0;
+                    const vOld = vA - vB;
+
+                    const { geq, ieq } = getDiodeCompanion(vOld);
+
+                    // Stamp conductance into G matrix
+                    if (n1 !== 0) G[n1 - 1][n1 - 1] += geq;
+                    if (n2 !== 0) G[n2 - 1][n2 - 1] += geq;
+                    if (n1 !== 0 && n2 !== 0) {
+                        G[n1 - 1][n2 - 1] -= geq;
+                        G[n2 - 1][n1 - 1] -= geq;
+                    }
+
+                    // Stamp equivalent current source into I vector
+                    if (n1 !== 0) I[n1 - 1] -= ieq;
+                    if (n2 !== 0) I[n2 - 1] += ieq;
+                }
+            });
+
+            solution = solve(G, I);
+
+            // --- TASK 30: VOLTAGE-STEP LIMITING & CONVERGENCE CHECK ---
+            let maxChange = 0;
+            for (let i = 0; i < numNodes; i++) {
+                let nodeVal = solution[i];
+                let oldVal = iterVoltages[i + 1] || 0;
+
+                // Limit maximum voltage jump per iteration to prevent exponential overflow/NaN
+                const maxJump = 0.5;
+                if (nodeVal - oldVal > maxJump) nodeVal = oldVal + maxJump;
+                if (nodeVal - oldVal < -maxJump) nodeVal = oldVal - maxJump;
+
+                if (isNaN(nodeVal) || !isFinite(nodeVal)) {
+                    nodeVal = oldVal;
+                }
+
+                maxChange = Math.max(maxChange, Math.abs(nodeVal - oldVal));
+                iterVoltages[i + 1] = nodeVal;
             }
 
-            if (comp.type === 'R') {
-                const g = 1 / compValue;
-                if (n1 !== 0) G[n1 - 1][n1 - 1] += g;
-                if (n2 !== 0) G[n2 - 1][n2 - 1] += g;
-                if (n1 !== 0 && n2 !== 0) {
-                    G[n1 - 1][n2 - 1] -= g;
-                    G[n2 - 1][n1 - 1] -= g;
-                }
-            } 
-            else if (comp.type === 'I') {
-                if (n1 !== 0) I[n1 - 1] -= compValue;
-                if (n2 !== 0) I[n2 - 1] += compValue;
-            } 
-            else if (comp.type === 'V') {
-                const k = vSourceIndex++;
-                if (n1 !== 0) {
-                    G[n1 - 1][k] += 1;
-                    G[k][n1 - 1] += 1;
-                }
-                if (n2 !== 0) {
-                    G[n2 - 1][k] -= 1;
-                    G[k][n2 - 1] -= 1;
-                }
-                I[k] = compValue;
+            if (maxChange < 1e-6 || iteration >= maxIterations) {
+                converged = true;
             }
-            else if (comp.type === 'C') {
-                // Task 16: Capacitor Companion Model (Backward Euler)
-                const geq = compValue / h; // C / h
-                
-                if (n1 !== 0) G[n1 - 1][n1 - 1] += geq;
-                if (n2 !== 0) G[n2 - 1][n2 - 1] += geq;
-                if (n1 !== 0 && n2 !== 0) {
-                    G[n1 - 1][n2 - 1] -= geq;
-                    G[n2 - 1][n1 - 1] -= geq;
-                }
-
-                const vOld1 = n1 !== 0 ? prevVoltages[n1] : 0;
-                const vOld2 = n2 !== 0 ? prevVoltages[n2] : 0;
-                const iHistory = geq * (vOld1 - vOld2);
-
-                if (n1 !== 0) I[n1 - 1] += iHistory;
-                if (n2 !== 0) I[n2 - 1] -= iHistory;
-            }
-            else if (comp.type === 'L') {
-                // Task 18: Inductor Companion Model
-                const geq = h / compValue; // h / L
-                
-                if (n1 !== 0) G[n1 - 1][n1 - 1] += geq;
-                if (n2 !== 0) G[n2 - 1][n2 - 1] += geq;
-                if (n1 !== 0 && n2 !== 0) {
-                    G[n1 - 1][n2 - 1] -= geq;
-                    G[n2 - 1][n1 - 1] -= geq;
-                }
-
-                const iOld = inductorCurrents[idx] || 0;
-                const vOld1 = n1 !== 0 ? prevVoltages[n1] : 0;
-                const vOld2 = n2 !== 0 ? prevVoltages[n2] : 0;
-                const iHistory = iOld + geq * (vOld1 - vOld2);
-
-                if (n1 !== 0) I[n1 - 1] -= iHistory;
-                if (n2 !== 0) I[n2 - 1] += iHistory;
-            }
-        });
-
-        const solution = solve(G, I);
+        }
 
         const currentVoltages = {};
         for (let i = 0; i < numNodes; i++) {
@@ -124,7 +174,6 @@ export function runTransient(netlist, tEnd, h) {
             }
         });
 
-        // Store results including node voltages and tracked inductor currents
         timeResults.push({ 
             time: Number(t.toFixed(6)), 
             voltages: currentVoltages,
