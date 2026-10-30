@@ -3,142 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Circuit Simulator - Final Complete</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #1e1e1e;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 { margin-bottom: 10px; font-size: 1.5rem; }
-        
-        .toolbar {
-            margin-bottom: 15px;
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: center;
-            align-items: center;
-        }
-        .tool-btn, select, button {
-            padding: 8px 12px;
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.9rem;
-        }
-        .tool-btn:hover, button:hover { background: #444; }
-        .tool-btn.active { background: #007acc; border-color: #0098ff; }
-        
-        .action-btn { background: #238636; border: none; }
-        .action-btn:hover { background: #2ea043; }
-        .pause-btn { background: #9e6a03; border: none; }
-        .pause-btn:hover { background: #bb8009; }
-        .danger-btn { background: #da3633; border: none; }
-        .danger-btn:hover { background: #f85149; }
-
-        .workspace {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        .pane {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        canvas {
-            border: 2px solid #555;
-            background: #252526;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            border-radius: 4px;
-        }
-        #circuitCanvas { cursor: crosshair; }
-        .plot-container {
-            width: 450px;
-            height: 340px;
-            background: #252526;
-            border: 2px solid #555;
-            border-radius: 4px;
-            padding: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        .console {
-            margin-top: 15px;
-            width: 920px;
-            height: 120px;
-            background: #111;
-            border: 1px solid #444;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 0.85rem;
-            overflow-y: auto;
-            color: #4ec9b0;
-            border-radius: 4px;
-        }
-        .instructions {
-            margin-top: 8px;
-            font-size: 0.8rem;
-            color: #aaa;
-        }
-    </style>
+    <title>Circuit Bench — Browser Circuit Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-
-    <h1>Interactive Circuit Simulator</h1>
-    
-    <div class="toolbar" id="palette">
-        <button class="tool-btn active" data-tool="SELECT">Select / Move</button>
-        <button class="tool-btn" data-tool="WIRE">Wire (W)</button>
-        <button class="tool-btn" data-tool="R">Resistor (R)</button>
-        <button class="tool-btn" data-tool="C">Capacitor (C)</button>
-        <button class="tool-btn" data-tool="D">Diode (D)</button>
-        <button class="tool-btn" data-tool="V">Source (V)</button>
-        <button class="tool-btn" data-tool="GND">Ground (0)</button>
-
-        <select id="exampleSelect">
-            <option value="" disabled selected>Load Example Circuit...</option>
-            <option value="rc">RC Filter</option>
-            <option value="rectifier">Half-Wave Rectifier</option>
-            <option value="divider">Voltage Divider</option>
-        </select>
-
-        <button class="tool-btn" id="saveBtn">Save JSON</button>
-        <button class="tool-btn" id="loadBtn">Load JSON</button>
-        <input type="file" id="importFile" accept=".json" style="display: none;">
-
-        <button class="action-btn" id="simulateBtn">Run</button>
-        <button class="pause-btn" id="pauseBtn">Pause</button>
-        <button class="tool-btn" id="resetBtn">Reset</button>
-        <button class="danger-btn" id="clearBtn">Clear</button>
-    </div>
-
-    <div class="workspace">
-        <div class="pane">
-            <canvas id="circuitCanvas" width="450" height="340"></canvas>
-        </div>
-        <div class="pane">
-            <div class="plot-container">
-                <canvas id="waveformChart"></canvas>
+    <div class="app">
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 32 32"><path d="M2 16h6l3-8 5 16 4-12 3 4h7" /></svg>
+                </span>
+                <div>
+                    <h1>Circuit Bench</h1>
+                    <p>MNA transient simulator</p>
+                </div>
             </div>
-        </div>
-    </div>
 
-    <div class="instructions">
-        Tip: Click any node dot to probe/toggle its waveform | Click component to edit value | Select + Delete to remove
-    </div>
+            <div class="topbar-group">
+                <label class="select-wrap">
+                    <span class="sr-only">Load example circuit</span>
+                    <select id="exampleSelect">
+                        <option value="" disabled selected>Examples…</option>
+                        <option value="rc">RC Filter</option>
+                        <option value="rectifier">Half-Wave Rectifier</option>
+                        <option value="divider">Voltage Divider</option>
+                    </select>
+                </label>
+                <button class="btn ghost" id="saveBtn" title="Download circuit as JSON">
+                    <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" /></svg>Save
+                </button>
+                <button class="btn ghost" id="loadBtn" title="Open a circuit JSON file">
+                    <svg viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 19h14" /></svg>Open
+                </button>
+                <input type="file" id="importFile" accept=".json" hidden>
+            </div>
 
-    <div class="console" id="consoleOutput">Simulator ready. Build circuits, load examples, or save/load via JSON.</div>
+            <div class="transport">
+                <button class="btn run" id="simulateBtn" title="Run simulation (Space)">
+                    <svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z" class="fill" /></svg>Run
+                </button>
+                <button class="btn" id="pauseBtn" title="Pause / resume sweep" disabled>
+                    <svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" /></svg><span>Pause</span>
+                </button>
+                <button class="btn" id="resetBtn" title="Clear simulation results">
+                    <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" /></svg>Reset
+                </button>
+                <button class="btn danger" id="clearBtn" title="Remove everything from the canvas">
+                    <svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3m-7 0 1 13h8l1-13" /></svg>Clear
+                </button>
+            </div>
+        </header>
+
+        <nav class="rail" id="palette" aria-label="Tools">
+            <button class="tool active" data-tool="SELECT" title="Select, move & probe (S)">
+                <svg viewBox="0 0 24 24"><path d="M6 3l12 9-5.5 1L15 19l-2.5 1-2.5-6L6 17z" /></svg>
+                <span>Select</span><kbd>S</kbd>
+            </button>
+            <button class="tool" data-tool="WIRE" title="Wire (W)">
+                <svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="2" /><circle cx="19" cy="7" r="2" /><path d="M7 17h5V7h5" /></svg>
+                <span>Wire</span><kbd>W</kbd>
+            </button>
+            <div class="rail-sep"></div>
+            <button class="tool" data-tool="R" title="Resistor (R)">
+                <svg viewBox="0 0 24 24"><path d="M1 12h4l2-5 3 10 3-10 3 10 2-5h5" /></svg>
+                <span>Resistor</span><kbd>R</kbd>
+            </button>
+            <button class="tool" data-tool="C" title="Capacitor (C)">
+                <svg viewBox="0 0 24 24"><path d="M1 12h9M14 12h9M10 5v14M14 5v14" /></svg>
+                <span>Capacitor</span><kbd>C</kbd>
+            </button>
+            <button class="tool" data-tool="D" title="Diode (D)">
+                <svg viewBox="0 0 24 24"><path d="M1 12h7M16 12h7M8 6v12l8-6zM16 6v12" /></svg>
+                <span>Diode</span><kbd>D</kbd>
+            </button>
+            <button class="tool" data-tool="V" title="Voltage source (V)">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" /><path d="M1 12h4M19 12h4M8 12h3M9.5 10.5v3M13 12h3" /></svg>
+                <span>Source</span><kbd>V</kbd>
+            </button>
+            <button class="tool" data-tool="GND" title="Ground (G)">
+                <svg viewBox="0 0 24 24"><path d="M12 3v9M5 12h14M8 16h8M11 20h2" /></svg>
+                <span>Ground</span><kbd>G</kbd>
+            </button>
+        </nav>
+
+        <main class="stage" id="stage">
+            <div class="stage-label">
+                <span class="dot"></span>Schematic
+                <span class="stage-hint" id="toolHint">Click a pin to probe it · Drag parts to move them</span>
+            </div>
+            <canvas id="circuitCanvas"></canvas>
+            <div class="empty" id="emptyState">
+                <div class="empty-card">
+                    <svg viewBox="0 0 64 32" aria-hidden="true"><path d="M2 16h12l4-10 6 20 6-20 6 20 4-10h22" /></svg>
+                    <h2>An empty breadboard</h2>
+                    <p>Pick a part from the left and drag across the grid to place it, or start from a ready-made circuit.</p>
+                    <div class="empty-actions">
+                        <button class="btn" data-example="rc">RC filter</button>
+                        <button class="btn" data-example="rectifier">Rectifier</button>
+                        <button class="btn" data-example="divider">Divider</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <aside class="side">
+            <section class="card scope">
+                <header class="card-head">
+                    <h3>Oscilloscope</h3>
+                    <span class="badge" id="scopeBadge">Idle</span>
+                </header>
+                <div class="sim-settings">
+                    <label>Duration<input id="tEndInput" value="20m" spellcheck="false"><em>s</em></label>
+                    <label>Step<input id="stepInput" value="100u" spellcheck="false"><em>s</em></label>
+                </div>
+                <div class="plot">
+                    <canvas id="waveformChart"></canvas>
+                    <div class="plot-empty" id="plotEmpty">Run the simulation to see waveforms</div>
+                </div>
+            </section>
+
+            <section class="card inspector" id="inspector">
+                <header class="card-head">
+                    <h3>Inspector</h3>
+                </header>
+                <div class="inspector-body" id="inspectorBody">
+                    <p class="muted">Select a part to edit its value. Click a pin in Select mode to add it to the scope.</p>
+                </div>
+            </section>
+
+            <section class="card log">
+                <header class="card-head">
+                    <h3>Log</h3>
+                </header>
+                <ol class="console" id="consoleOutput"></ol>
+            </section>
+        </aside>
+
+        <footer class="statusbar">
+            <span id="statusTool">Tool: Select</span>
+            <span id="statusCursor">x — y —</span>
+            <span id="statusCounts">0 parts · 0 nodes</span>
+            <span class="kbd-help"><kbd>Space</kbd> run · <kbd>Del</kbd> delete · <kbd>Esc</kbd> cancel</span>
+        </footer>
+    </div>
 
     <script type="module" src="./editor.js"></script>
 </body>
